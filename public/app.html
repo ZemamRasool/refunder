@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RefundRadar — My money</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a class="logo" href="/"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 1 9 9M12 7a5 5 0 0 1 5 5"/></svg></span>RefundRadar</a>
+      <div class="top-right"><span class="muted hide-sm" id="who"></span> <button class="btn btn-ghost hidden" id="logout">Log out</button></div>
+    </header>
+
+    <!-- Login -->
+    <section class="card login hidden" id="login-view">
+      <h2>Log in or create an account</h2>
+      <p class="muted" id="login-hint">We'll email you a sign-in link. No password needed.</p>
+      <form id="login-form" class="stack">
+        <input type="email" name="email" required placeholder="you@email.com" aria-label="Email address" autocomplete="email">
+        <button class="btn btn-primary" type="submit">Continue</button>
+      </form>
+      <button class="btn btn-ghost hidden full" id="google-btn">Continue with Google</button>
+      <div id="login-msg"></div>
+    </section>
+
+    <!-- First-time setup: country + fee agreement -->
+    <section class="card login hidden" id="onboard-view">
+      <h2>Two quick things</h2>
+      <p class="muted">We start with one country so we can get every claim right.</p>
+      <form id="onboard-form" class="stack">
+        <label class="field"><span>Where do you live?</span>
+          <select name="country" id="country" required></select>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="acceptTerms" required>
+          <span>I agree to the <a href="/terms" target="_blank">terms</a> and <a href="/privacy" target="_blank">privacy policy</a>. RefundRadar charges <b id="fee-pct">25%</b> of money it helps me recover, and nothing if nothing is recovered.</span>
+        </label>
+        <button class="btn btn-primary" type="submit">Start finding money</button>
+      </form>
+      <div id="onboard-msg"></div>
+    </section>
+
+    <!-- Main app -->
+    <section class="hidden" id="app-view">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="money" role="tab">Money found</button>
+        <button class="tab" data-tab="receipts" role="tab">Receipts</button>
+        <button class="tab" data-tab="settings" role="tab">Settings</button>
+        <a class="tab hidden" id="admin-link" href="/admin">Admin</a>
+      </nav>
+
+      <div data-panel="money">
+        <div class="summary card">
+          <div>
+            <div class="muted small">You may be owed</div>
+            <div class="big" id="owed">—</div>
+          </div>
+          <div>
+            <div class="muted small">Recovered so far</div>
+            <div class="big brand" id="recovered">—</div>
+          </div>
+          <button class="btn btn-ghost" id="rescan">Check again</button>
+        </div>
+        <div id="pending-note" class="msg ok hidden"></div>
+        <div id="claims"></div>
+      </div>
+
+      <div data-panel="receipts" class="hidden">
+        <div class="app-grid">
+          <div class="card">
+            <h2>Your forwarding address</h2>
+            <p class="muted">Forward any receipt, order confirmation, subscription email or flight booking here. It's private to you.</p>
+            <div class="addr"><code id="fwd"></code><button class="btn btn-ghost" id="copy">Copy</button></div>
+          </div>
+          <div class="card">
+            <h2>Upload a receipt</h2>
+            <p class="muted">Photo, PDF or text file, up to 10 MB.</p>
+            <label class="drop" id="drop">
+              <input type="file" id="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain">
+              <span id="drop-text">Drop a file here or click to choose</span>
+            </label>
+            <div id="upload-msg"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Your receipts</h2>
+          <div class="scroll-x">
+            <table>
+              <thead><tr><th>Store</th><th>Date</th><th class="hide-sm">Order #</th><th class="right">Amount</th><th>Status</th></tr></thead>
+              <tbody id="rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div data-panel="settings" class="hidden">
+        <div class="app-grid">
+          <div class="card">
+            <h2>Fees</h2>
+            <p class="muted" id="fee-line"></p>
+            <div id="billing-box"></div>
+            <div id="fees"></div>
+          </div>
+          <div class="card">
+            <h2>Your data</h2>
+            <p class="muted">We only read what you send us. Original files are deleted after 30 days; the store, amount and date are kept so your claims keep working.</p>
+            <div class="stack">
+              <button class="btn btn-ghost" id="rotate">Get a new forwarding address</button>
+              <button class="btn btn-ghost" id="export">Download my data</button>
+              <button class="btn btn-danger" id="delete">Delete my account</button>
+            </div>
+            <div id="settings-msg"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

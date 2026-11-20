@@ -1,0 +1,233 @@
+// RefundRadar database schema.
+// Tables follow SPEC.md "Data model", plus a few support tables:
+//   jobs        — background work queue (reading receipts, scanning rules) kept in Postgres
+//   audit_logs  — who accessed or changed what (SPEC.md security basics)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// The connection URL lives in prisma.config.ts (Prisma 7).
+datasource db {
+  provider = "postgresql"
+}
+
+// Landing-page email form (validation test).
+model WaitlistSignup {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  country   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("waitlist_signups")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  // Firebase user id. We never store passwords ourselves.
+  firebaseUid     String    @unique @map("firebase_uid")
+  email           String    @unique
+  // ISO country code, e.g. "GB", "US", "DE". Set during onboarding.
+  country         String?
+  // Private receipt forwarding address token: <token>@INBOUND_EMAIL_DOMAIN
+  forwardingKey   String    @unique @map("forwarding_key")
+  // The fee agreement the user accepted at signup (SPEC.md: "clear agreement at signup").
+  termsVersion    String?   @map("terms_version")
+  termsAcceptedAt DateTime? @map("terms_accepted_at")
+  feePercent      Decimal?  @map("fee_percent") @db.Decimal(5, 2)
+  // Payment provider customer (Stripe). Card details are held by the provider, never by us.
+  paymentCustomerId String? @map("payment_customer_id")
+  paymentMethodReady Boolean @default(false) @map("payment_method_ready")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  receipts Receipt[]
+  claims   Claim[]
+  payouts  Payout[]
+
+  @@map("users")
+}
+
+enum ReceiptSource {
+  upload
+  email
+}
+
+enum ReceiptStatus {
+  pending // saved, waiting for the AI reader
+  parsed // AI output passed validation
+  failed // AI could not read it, or its output was invalid
+}
+
+model Receipt {
+  id           String        @id @default(cuid())
+  userId       String        @map("user_id")
+  source       ReceiptSource
+  status       ReceiptStatus @default(pending)
+  // Where the encrypted original file is stored. Deleted after 30 days.
+  rawFileUrl   String?       @map("raw_file_url")
+  mimeType     String?       @map("mime_type")
+  // SHA-256 of the original file/text, so the same receipt is not counted twice.
+  contentHash  String?       @map("content_hash")
+  // Email text, encrypted at rest. Cleared after 30 days.
+  rawText      String?       @map("raw_text")
+  merchant     String?
+  amount       Decimal?      @db.Decimal(12, 2)
+  currency     String?       @db.Char(3)
+  purchaseDate DateTime?     @map("purchase_date") @db.Date
+  orderId      String?       @map("order_id")
+  // The full validated JSON from the AI reader.
+  parsedJson   Json?         @map("parsed_json")
+  parseError   String?       @map("parse_error")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  claims Claim[]
+
+  @@index([userId, createdAt])
+  @@index([userId, contentHash])
+  @@map("receipts")
+}
+
+enum ClaimType {
+  duplicate_charge
+  forgotten_subscription
+  flight_compensation
+}
+
+model ClaimRule {
+  id             String    @id @default(cuid())
+  // Stable name used by the code, e.g. "eu261".
+  code           String    @unique
+  name           String
+  type           ClaimType
+  // "*" = everywhere, or a region/country code such as "EU" or "GB".
+  country        String
+  conditionsJson Json      @map("conditions_json")
+  templateText   String    @map("template_text")
+  // won / (won + lost). Recalculated when a claim closes (SPEC.md: drop weak rules).
+  successRate    Float?    @map("success_rate")
+  active         Boolean   @default(true)
+
+  claims Claim[]
+
+  @@map("claim_rules")
+}
+
+enum ClaimStatus {
+  found // the rules engine found it; waiting for the user
+  approved // the user approved it; claim letter written
+  sent // the claim was sent to the company
+  won // money recovered
+  lost // the company refused
+  dismissed // the user said it is not a real claim
+}
+
+model Claim {
+  id              String      @id @default(cuid())
+  userId          String      @map("user_id")
+  receiptId       String      @map("receipt_id")
+  // For duplicate charges: the other receipt of the pair.
+  relatedReceiptId String?    @map("related_receipt_id")
+  ruleId          String      @map("rule_id")
+  // Stops the same finding being created twice when the rules run again.
+  dedupeKey       String      @map("dedupe_key")
+  status          ClaimStatus @default(found)
+  currency        String?     @db.Char(3)
+  expectedAmount  Decimal?    @map("expected_amount") @db.Decimal(12, 2)
+  recoveredAmount Decimal?    @map("recovered_amount") @db.Decimal(12, 2)
+  // Plain-language "here is why" shown to the user.
+  reason          String
+  // Rule-specific facts (distance, delay, charge dates…) and any question for the user.
+  detailsJson     Json        @map("details_json")
+  letterSubject   String?     @map("letter_subject")
+  letterText      String?     @map("letter_text")
+  approvedAt      DateTime?   @map("approved_at")
+  sentAt          DateTime?   @map("sent_at")
+  resolvedAt      DateTime?   @map("resolved_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipt Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  rule    ClaimRule @relation(fields: [ruleId], references: [id])
+  payout  Payout?
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, status])
+  @@map("claims")
+}
+
+enum PayoutStatus {
+  pending // fee worked out, not charged yet
+  processing // charge sent to the payment provider
+  paid
+  failed
+  waived // admin decided not to charge
+}
+
+// The fee we charge on a won claim.
+model Payout {
+  id            String       @id @default(cuid())
+  claimId       String       @unique @map("claim_id")
+  userId        String       @map("user_id")
+  status        PayoutStatus @default(pending)
+  currency      String       @db.Char(3)
+  feePercent    Decimal      @map("fee_percent") @db.Decimal(5, 2)
+  feeAmount     Decimal      @map("fee_amount") @db.Decimal(12, 2)
+  provider      String
+  providerRef   String?      @map("provider_ref")
+  failureReason String?      @map("failure_reason")
+  paidAt        DateTime?    @map("paid_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("payouts")
+}
+
+enum JobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+// Background work. Workers pick jobs with "FOR UPDATE SKIP LOCKED", so the website never waits on the AI.
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(queued)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3) @map("max_attempts")
+  runAt       DateTime  @default(now()) @map("run_at")
+  lockedAt    DateTime? @map("locked_at")
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, runAt])
+  @@map("jobs")
+}
+
+// Who accessed or changed what. Kept even if the user is deleted (no foreign key).
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  @map("actor_id")
+  actorEmail String?  @map("actor_email")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  ip         String?
+  meta       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@map("audit_logs")
+}

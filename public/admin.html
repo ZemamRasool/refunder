@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>RefundRadar — Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="wrap wide">
+    <header class="top">
+      <a class="logo" href="/app"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 1 9 9M12 7a5 5 0 0 1 5 5"/></svg></span>RefundRadar admin</a>
+      <div class="top-right"><span class="muted hide-sm" id="who"></span> <button class="btn btn-ghost hidden" id="logout">Log out</button></div>
+    </header>
+
+    <section class="card login hidden" id="login-view">
+      <h2>Admin log in</h2>
+      <p class="muted" id="login-hint">We'll email you a sign-in link.</p>
+      <form id="login-form" class="stack">
+        <input type="email" name="email" required placeholder="you@email.com" aria-label="Email address">
+        <button class="btn btn-primary" type="submit">Continue</button>
+      </form>
+      <button class="btn btn-ghost hidden full" id="google-btn">Continue with Google</button>
+      <div id="login-msg"></div>
+    </section>
+
+    <section class="hidden" id="app-view">
+      <div class="tiles" id="tiles"></div>
+
+      <div class="card">
+        <div class="card-head"><h2>Fees</h2>
+          <select id="payout-filter" aria-label="Filter fees">
+            <option value="">All</option><option value="pending">Pending</option><option value="processing">Processing</option><option value="failed">Failed</option><option value="paid">Paid</option><option value="waived">Waived</option>
+          </select>
+        </div>
+        <p class="muted small">With manual payments: invoice the customer, then press "Mark paid" when the money arrives.</p>
+        <div class="scroll-x"><table><thead><tr><th>Customer</th><th>Recovered</th><th class="right">Fee</th><th>Status</th><th>When</th><th></th></tr></thead><tbody id="payouts"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <h2>Rules</h2>
+        <p class="muted small">Success rate = won ÷ (won + lost). Switch off rules that keep losing.</p>
+        <div class="scroll-x"><table><thead><tr><th>Rule</th><th>Found</th><th>Approved</th><th>Sent</th><th>Won</th><th>Lost</th><th>Dismissed</th><th>Success</th><th>Active</th></tr></thead><tbody id="rules"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Claims</h2>
+          <select id="claim-filter" aria-label="Filter claims">
+            <option value="">All</option><option value="found">Found</option><option value="approved">Approved</option><option value="sent">Sent</option><option value="won">Won</option><option value="lost">Lost</option><option value="dismissed">Dismissed</option>
+          </select>
+        </div>
+        <div class="scroll-x"><table><thead><tr><th>Customer</th><th>Rule</th><th>Store</th><th class="right">Expected</th><th class="right">Recovered</th><th>Status</th><th>Found</th></tr></thead><tbody id="claims"></tbody></table></div>
+      </div>
+
+      <div class="app-grid">
+        <div class="card">
+          <h2>Failed background jobs</h2>
+          <div class="scroll-x"><table><thead><tr><th>Type</th><th>Error</th><th></th></tr></thead><tbody id="jobs"></tbody></table></div>
+        </div>
+        <div class="card">
+          <h2>Audit log</h2>
+          <div class="scroll-x audit"><table><thead><tr><th>When</th><th>Who</th><th>Action</th></tr></thead><tbody id="audit"></tbody></table></div>
+        </div>
+      </div>
+      <div id="admin-msg"></div>
+    </section>
+  </div>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>
